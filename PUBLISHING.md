@@ -30,7 +30,7 @@ Releases go to the **Sonatype Central Portal** (central.sonatype.com) under the
 
 1. Set a non-SNAPSHOT version across all modules:
    ```bash
-   mvn versions:set -DnewVersion=0.1.0
+   mvn versions:set -DnewVersion=0.2.0
    ```
 2. Deploy (signs, builds sources + javadoc, uploads, and — with `autoPublish=true` — publishes):
    ```bash
@@ -38,8 +38,8 @@ Releases go to the **Sonatype Central Portal** (central.sonatype.com) under the
    ```
 3. Tag and bump to the next snapshot:
    ```bash
-   git tag v0.1.0 && git push --tags
-   mvn versions:set -DnewVersion=0.2.0-SNAPSHOT
+   git tag v0.2.0 && git push --tags
+   mvn versions:set -DnewVersion=0.3.0-SNAPSHOT
    ```
 
 Consumers then depend on it with no extra repository config:
@@ -48,6 +48,6 @@ Consumers then depend on it with no extra repository config:
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-core</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```

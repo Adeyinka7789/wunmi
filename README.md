@@ -76,12 +76,12 @@ auto-configured — so with a datasource you need **zero** persistence code:
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-spring-boot-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-jdbc</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
@@ -144,7 +144,7 @@ API. It has no auth of its own — **secure `/wunmi/admin/**` behind your own se
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-admin-ui</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
