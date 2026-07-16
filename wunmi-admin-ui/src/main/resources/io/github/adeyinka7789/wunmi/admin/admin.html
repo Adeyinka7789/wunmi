@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wunmi · feature flags</title>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa3b2; --accent:#5b8cff; --on:#3fb950; --off:#8b949e; --danger:#f85149;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f5; --line:#e2e5ea;
+            --text:#1c2027; --muted:#5b6472; --accent:#2f6bff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-size:20px; margin:0; letter-spacing:.2px; }
+  h1 span { color:var(--muted); font-weight:400; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:22px; }
+  .new { display:flex; gap:8px; }
+  input, select { background:var(--panel2); border:1px solid var(--line); color:var(--text);
+                  border-radius:8px; padding:7px 10px; font:inherit; }
+  input:focus, select:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  button { border:1px solid var(--line); background:var(--panel2); color:var(--text);
+           border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.link { border:none; background:none; color:var(--muted); padding:4px 6px; }
+  button.link:hover { color:var(--accent); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; margin-bottom:12px; }
+  .row { display:flex; align-items:center; gap:14px; padding:14px 16px; }
+  .name { font-weight:600; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .grow { flex:1; }
+  .badge { font-size:12px; font-weight:600; padding:2px 9px; border-radius:20px; }
+  .badge.on { color:#fff; background:var(--on); }
+  .badge.off { color:#fff; background:var(--off); }
+  .muted { color:var(--muted); }
+  .rollout { width:64px; text-align:right; }
+  .ov { border-top:1px solid var(--line); padding:12px 16px; display:none; }
+  .ov.open { display:block; }
+  .ov table { width:100%; border-collapse:collapse; margin-bottom:10px; }
+  .ov td { padding:6px 4px; border-bottom:1px solid var(--line); }
+  .ov .form { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .scope { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+  .empty { color:var(--muted); padding:40px; text-align:center; }
+  #err { color:var(--danger); margin-bottom:14px; min-height:18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>wunmi <span>· feature flags</span></h1>
+    <div class="new">
+      <input id="newName" placeholder="NEW_FLAG_NAME" autocomplete="off">
+      <button class="primary" onclick="createFlag()">Add flag</button>
+    </div>
+  </header>
+  <div id="err"></div>
+  <div id="list"><div class="empty">Loading…</div></div>
+</div>
+
+<script>
+const BASE = "__BASE__";
+const el = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild; };
+const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+
+function showErr(m) { document.getElementById('err').textContent = m || ''; }
+
+async function api(method, path, body) {
+  const res = await fetch(BASE + path, {
+    method, headers: body ? {'Content-Type':'application/json'} : {},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) throw new Error(method + ' ' + path + ' → ' + res.status);
+  return res.status === 204 ? null : res.json();
+}
+
+async function load() {
+  showErr('');
+  try {
+    const flags = await api('GET', '/api/flags');
+    const list = document.getElementById('list');
+    list.innerHTML = '';
+    if (!flags.length) { list.appendChild(el('<div class="empty">No flags yet. Add one above.</div>')); return; }
+    flags.sort((a,b) => a.name.localeCompare(b.name)).forEach(f => list.appendChild(flagCard(f)));
+  } catch (e) { showErr(e.message); }
+}
+
+function flagCard(f) {
+  const card = el('<div class="card"></div>');
+  const badge = f.enabled ? '<span class="badge on">Enabled</span>' : '<span class="badge off">Disabled</span>';
+  card.appendChild(el(`
+    <div class="row">
+      <span class="name">${esc(f.name)}</span>
+      ${badge}
+      <span class="grow"></span>
+      <span class="muted">rollout</span>
+      <input class="rollout" type="number" min="0" max="100" value="${f.rolloutPercentage}">
+      <button class="link" data-a="save-rollout">save</button>
+      <button data-a="toggle">${f.enabled ? 'Disable' : 'Enable'}</button>
+      <button class="link" data-a="overrides">overrides</button>
+    </div>
+    <div class="ov"></div>`));
+  const rolloutInput = card.querySelector('.rollout');
+  const ov = card.querySelector('.ov');
+  card.querySelector('[data-a=toggle]').onclick = () => act('POST', `/api/flags/${encodeURIComponent(f.name)}/` + (f.enabled ? 'disable' : 'enable'));
+  card.querySelector('[data-a=save-rollout]').onclick = () => act('PUT', `/api/flags/${encodeURIComponent(f.name)}/rollout`, {percentage: parseInt(rolloutInput.value, 10)});
+  card.querySelector('[data-a=overrides]').onclick = () => toggleOverrides(f.name, ov);
+  return card;
+}
+
+async function act(method, path, body) {
+  showErr('');
+  try { await api(method, path, body); await load(); } catch (e) { showErr(e.message); }
+}
+
+async function toggleOverrides(name, ov) {
+  if (ov.classList.contains('open')) { ov.classList.remove('open'); ov.innerHTML=''; return; }
+  ov.classList.add('open');
+  ov.innerHTML = '<div class="muted">Loading…</div>';
+  try {
+    const list = await api('GET', `/api/flags/${encodeURIComponent(name)}/overrides`);
+    const rows = list.map(o => `
+      <tr>
+        <td class="scope">${esc(o.scope)}</td>
+        <td class="name">${esc(o.value)}</td>
+        <td>${o.enabled ? '<span class="badge on">on</span>' : '<span class="badge off">off</span>'}</td>
+        <td class="muted">${esc(o.reason)}</td>
+        <td style="text-align:right"><button class="link" data-del="${o.id}">remove</button></td>
+      </tr>`).join('');
+    ov.innerHTML = `
+      <table><tbody>${rows || '<tr><td class="muted">No overrides.</td></tr>'}</tbody></table>
+      <div class="form">
+        <select data-f="scope"><option value="SUBJECT">SUBJECT</option><option value="SEGMENT">SEGMENT</option></select>
+        <input data-f="value" placeholder="subject id / segment name" autocomplete="off">
+        <label class="muted"><input data-f="enabled" type="checkbox" checked> enabled</label>
+        <input data-f="reason" placeholder="reason (optional)" autocomplete="off">
+        <button class="primary" data-add>Add override</button>
+      </div>`;
+    ov.querySelectorAll('[data-del]').forEach(b => b.onclick = () => act('DELETE', `/api/overrides/${b.getAttribute('data-del')}`));
+    ov.querySelector('[data-add]').onclick = () => {
+      const val = ov.querySelector('[data-f=value]').value.trim();
+      if (!val) { showErr('Override needs a subject id or segment name.'); return; }
+      act('POST', `/api/flags/${encodeURIComponent(name)}/overrides`, {
+        scope: ov.querySelector('[data-f=scope]').value,
+        value: val,
+        enabled: ov.querySelector('[data-f=enabled]').checked,
+        reason: ov.querySelector('[data-f=reason]').value.trim() || null
+      });
+    };
+  } catch (e) { ov.innerHTML = ''; showErr(e.message); }
+}
+
+function createFlag() {
+  const input = document.getElementById('newName');
+  const name = input.value.trim();
+  if (!name) { showErr('Enter a flag name.'); return; }
+  input.value = '';
+  act('POST', '/api/flags', {name});
+}
+
+load();
+</script>
+</body>
+</html>

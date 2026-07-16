@@ -8,6 +8,7 @@ the core (only SLF4J).
 - **`wunmi-jdbc`** — a ready-made `FlagStore` over any JDBC database, with a portable schema.
 - **`wunmi-spring-boot-starter`** — auto-configuration, a request-scoped cache, and a
   `@RequiresFlag` method gate for Spring Boot apps.
+- **`wunmi-admin-ui`** — an optional, self-contained admin console (`/wunmi/admin`).
 
 Java 17+.
 
@@ -112,6 +113,20 @@ Defaults (override by declaring your own bean):
 | `FlagCache` | `RequestScopedFlagCache` — request-scoped, short-TTL fallback (`wunmi.cache-ttl-ms`, default 5000) |
 | `FlagContextResolver` | `FlagContext.EMPTY` (global resolution only) |
 | `FlagAuditListener` | no-op |
+
+## Admin console
+
+Add `wunmi-admin-ui` and a dependency-free management page appears at **`/wunmi/admin`**
+(list/add flags, toggle, set rollout, add/remove subject & segment overrides) over a small JSON
+API. It has no auth of its own — **secure `/wunmi/admin/**` behind your own security config.**
+
+```xml
+<dependency>
+    <groupId>io.github.adeyinka7789</groupId>
+    <artifactId>wunmi-admin-ui</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
 
 ## The SPIs
 

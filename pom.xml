@@ -25,6 +25,7 @@
         <module>wunmi-core</module>
         <module>wunmi-jdbc</module>
         <module>wunmi-spring-boot-starter</module>
+        <module>wunmi-admin-ui</module>
     </modules>
 
     <properties>
@@ -103,6 +104,18 @@
     </dependencyManagement>
 
     <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <!-- Retain method parameter names (belt-and-suspenders alongside explicit
+                         @PathVariable names): also helps @ConfigurationProperties binding. -->
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+        </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>
