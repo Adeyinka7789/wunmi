@@ -25,6 +25,8 @@ Releases go to the **Sonatype Central Portal** (central.sonatype.com) under the
    gpg --gen-key
    gpg --keyserver keyserver.ubuntu.com --send-keys YOUR_KEY_ID
    ```
+   Do **not** put `<gpg.passphrase>` in `settings.xml`. It does not work (see below), and it stores
+   a secret on disk for no benefit — signing goes through gpg-agent instead.
 
 ## Cutting a release
 
@@ -32,10 +34,26 @@ Releases go to the **Sonatype Central Portal** (central.sonatype.com) under the
    ```bash
    mvn versions:set -DnewVersion=0.2.0
    ```
-2. Deploy (signs, builds sources + javadoc, uploads, and — with `autoPublish=true` — publishes):
+2. **Unlock the GPG key first**, then deploy (signs, builds sources + javadoc, uploads, and —
+   with `autoPublish=true` — publishes):
    ```bash
-   mvn -Prelease deploy -Dgpg.passphrase=YOUR_PASSPHRASE
+   echo x > .sigwarm && gpg --batch --yes --pinentry-mode loopback --detach-sign .sigwarm && rm .sigwarm*
+   mvn -Prelease deploy
    ```
+
+   > **Why the first line.** `maven-gpg-plugin` 3.2.4 does *not* successfully pass a passphrase to
+   > gpg on Windows — it appends a newline, which becomes `\r\n`, so gpg reads the passphrase as
+   > `secret\r` and fails with `gpg: signing failed: Bad passphrase`. This is true whether the
+   > passphrase comes from `-Dgpg.passphrase`, `<gpg.passphrase>` in `settings.xml`, or
+   > `MAVEN_GPG_PASSPHRASE` — all three are broken here, which is why the plugin itself warns
+   > "rely on gpg-agent".
+   >
+   > Signing therefore only works when **gpg-agent already holds the unlocked key**. The command
+   > above prompts once and caches it, so the deploy's signatures succeed. If you skip it, the
+   > release fails at the *first* module (nothing is uploaded, so it's safe to retry).
+   >
+   > A release that "worked without this step" only did so because the agent was still warm from an
+   > earlier `gpg` command — don't rely on that.
 3. Tag and bump to the next snapshot:
    ```bash
    git tag v0.2.0 && git push --tags
