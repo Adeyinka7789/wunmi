@@ -21,6 +21,19 @@
             <artifactId>wunmi-core</artifactId>
         </dependency>
 
+        <!-- Optional: present → a JdbcFlagStore is auto-configured when a DataSource exists.
+             Apps that supply their own FlagStore don't need it on the classpath. -->
+        <dependency>
+            <groupId>io.github.adeyinka7789</groupId>
+            <artifactId>wunmi-jdbc</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
@@ -48,6 +61,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

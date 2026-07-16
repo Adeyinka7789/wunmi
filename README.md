@@ -5,6 +5,7 @@ overrides, and percentage rollouts — over four pluggable SPIs, with no framewo
 the core (only SLF4J).
 
 - **`wunmi-core`** — the engine. Pure Java, framework-free.
+- **`wunmi-jdbc`** — a ready-made `FlagStore` over any JDBC database, with a portable schema.
 - **`wunmi-spring-boot-starter`** — auto-configuration, a request-scoped cache, and a
   `@RequiresFlag` method gate for Spring Boot apps.
 
@@ -55,9 +56,20 @@ flags.setRollout("BETA_CHECKOUT", 25, "admin@acme.com");                 // 25% 
 flags.putOverride("BETA_CHECKOUT", Scope.SUBJECT, userId, true, "VIP", "admin@acme.com");
 ```
 
+## Persistence
+
+Implement `FlagStore` over your own database, or use the bundled **`wunmi-jdbc`** — a
+`FlagStore` over any `DataSource`, no ORM:
+
+```java
+WunmiSchema.initialize(dataSource);              // idempotent CREATE TABLE IF NOT EXISTS
+FlagStore store = new JdbcFlagStore(dataSource);
+```
+
 ## Spring Boot
 
-Add the starter and declare a `FlagStore` bean — everything else is auto-configured:
+Add the starter. If `wunmi-jdbc` is on the classpath and you have a `DataSource`, a store is
+auto-configured — so with a datasource you need **zero** persistence code:
 
 ```xml
 <dependency>
@@ -65,13 +77,21 @@ Add the starter and declare a `FlagStore` bean — everything else is auto-confi
     <artifactId>wunmi-spring-boot-starter</artifactId>
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
+<dependency>
+    <groupId>io.github.adeyinka7789</groupId>
+    <artifactId>wunmi-jdbc</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
 ```
 
-```java
-@Bean
-FlagStore flagStore(JdbcTemplate jdbc) { return new MyJdbcFlagStore(jdbc); }
+```properties
+wunmi.jdbc.initialize-schema=true   # create the tables at startup (dev / first run)
+```
 
-// Optional — declare a FlagContextResolver bean to enable overrides + rollout:
+Or supply your own store instead by declaring a `FlagStore` bean. Either way, declare a
+`FlagContextResolver` bean to enable per-subject/segment overrides and rollout:
+
+```java
 @Bean
 FlagContextResolver flagContext() {
     return () -> new FlagContext(CurrentUser.id(), CurrentUser.plan());
@@ -97,7 +117,7 @@ Defaults (override by declaring your own bean):
 
 | SPI | You implement it to… | Bundled defaults |
 |-----|----------------------|------------------|
-| `FlagStore` | persist flags + overrides | — (you provide) |
+| `FlagStore` | persist flags + overrides | `JdbcFlagStore` (module `wunmi-jdbc`) |
 | `FlagCache` | cache reads | `FlagCache.NONE`, `TtlFlagCache`, `RequestScopedFlagCache` (Spring) |
 | `FlagAuditListener` | record changes | `FlagAuditListener.NOOP` |
 | `FlagContextResolver` | say who is asking | `FlagContextResolver.EMPTY` |

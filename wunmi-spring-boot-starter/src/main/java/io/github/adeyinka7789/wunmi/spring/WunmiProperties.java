@@ -15,11 +15,35 @@ public class WunmiProperties {
      */
     private long cacheTtlMs = 5000;
 
+    private final Jdbc jdbc = new Jdbc();
+
     public long getCacheTtlMs() {
         return cacheTtlMs;
     }
 
     public void setCacheTtlMs(long cacheTtlMs) {
         this.cacheTtlMs = cacheTtlMs;
+    }
+
+    public Jdbc getJdbc() {
+        return jdbc;
+    }
+
+    /** Settings for the bundled JDBC store (only used when {@code wunmi-jdbc} is on the classpath). */
+    public static class Jdbc {
+
+        /**
+         * Whether to create the wunmi tables at startup (idempotent {@code CREATE TABLE IF NOT
+         * EXISTS}). Off by default — turn on for dev/first run, or manage the schema yourself.
+         */
+        private boolean initializeSchema = false;
+
+        public boolean isInitializeSchema() {
+            return initializeSchema;
+        }
+
+        public void setInitializeSchema(boolean initializeSchema) {
+            this.initializeSchema = initializeSchema;
+        }
     }
 }

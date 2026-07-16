@@ -23,6 +23,7 @@
 
     <modules>
         <module>wunmi-core</module>
+        <module>wunmi-jdbc</module>
         <module>wunmi-spring-boot-starter</module>
     </modules>
 
@@ -36,6 +37,7 @@
         <junit.version>5.10.2</junit.version>
         <assertj.version>3.25.3</assertj.version>
         <mockito.version>5.11.0</mockito.version>
+        <h2.version>2.2.224</h2.version>
     </properties>
 
     <dependencyManagement>
@@ -53,6 +55,18 @@
                 <groupId>io.github.adeyinka7789</groupId>
                 <artifactId>wunmi-core</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.adeyinka7789</groupId>
+                <artifactId>wunmi-jdbc</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>${h2.version}</version>
+                <scope>test</scope>
             </dependency>
 
             <dependency>
