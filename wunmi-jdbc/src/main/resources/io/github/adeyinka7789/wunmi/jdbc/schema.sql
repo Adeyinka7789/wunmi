@@ -19,3 +19,10 @@ CREATE TABLE IF NOT EXISTS wunmi_flag_overrides (
     created_by     VARCHAR(200),
     CONSTRAINT uq_wunmi_override UNIQUE (flag_name, scope, override_value)
 );
+
+-- Single-row generation counter for cross-instance cache invalidation
+-- (JdbcFlagChangeBroadcaster). Bumped on every write; peers poll it.
+CREATE TABLE IF NOT EXISTS wunmi_flag_version (
+    id      INT PRIMARY KEY,
+    version BIGINT NOT NULL
+);

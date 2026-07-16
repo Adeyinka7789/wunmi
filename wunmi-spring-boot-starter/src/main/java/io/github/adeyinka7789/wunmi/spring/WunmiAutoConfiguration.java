@@ -2,9 +2,11 @@ package io.github.adeyinka7789.wunmi.spring;
 
 import io.github.adeyinka7789.wunmi.FlagAuditListener;
 import io.github.adeyinka7789.wunmi.FlagCache;
+import io.github.adeyinka7789.wunmi.FlagChangeBroadcaster;
 import io.github.adeyinka7789.wunmi.FlagContextResolver;
 import io.github.adeyinka7789.wunmi.FlagEngine;
 import io.github.adeyinka7789.wunmi.FlagStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -21,6 +23,9 @@ import org.springframework.context.annotation.Bean;
  *   <li>{@link FlagContextResolver} → {@link FlagContextResolver#EMPTY} (global resolution only —
  *       declare your own to enable per-subject/segment overrides and rollout)</li>
  *   <li>{@link FlagAuditListener} → {@link FlagAuditListener#NOOP}</li>
+ *   <li>{@link FlagChangeBroadcaster} → the bundled JDBC one when {@code wunmi-jdbc} and a
+ *       {@code DataSource} are present (see {@link WunmiJdbcAutoConfiguration}), otherwise
+ *       {@link FlagChangeBroadcaster#NONE} — declare your own for Redis/Kafka fan-out</li>
  * </ul>
  *
  * The {@link RequiresFlagAspect} is registered so {@link RequiresFlag} works out of the box.
@@ -51,8 +56,10 @@ public class WunmiAutoConfiguration {
     @ConditionalOnBean(FlagStore.class)
     @ConditionalOnMissingBean
     public FlagEngine flagEngine(FlagStore store, FlagCache cache,
-                                 FlagAuditListener audit, FlagContextResolver contextResolver) {
-        return new FlagEngine(store, cache, audit, contextResolver);
+                                 FlagAuditListener audit, FlagContextResolver contextResolver,
+                                 ObjectProvider<FlagChangeBroadcaster> broadcaster) {
+        return new FlagEngine(store, cache, audit, contextResolver,
+                broadcaster.getIfAvailable(() -> FlagChangeBroadcaster.NONE));
     }
 
     @Bean

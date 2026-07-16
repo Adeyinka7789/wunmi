@@ -40,13 +40,24 @@ public final class FlagEngine {
     private final FlagCache cache;
     private final FlagAuditListener audit;
     private final FlagContextResolver contextResolver;
+    private final FlagChangeBroadcaster broadcaster;
 
+    /** Full wiring, including cross-instance cache invalidation via {@code broadcaster}. */
     public FlagEngine(FlagStore store, FlagCache cache, FlagAuditListener audit,
-                      FlagContextResolver contextResolver) {
+                      FlagContextResolver contextResolver, FlagChangeBroadcaster broadcaster) {
         this.store = requireNonNull(store, "store");
         this.cache = requireNonNull(cache, "cache");
         this.audit = requireNonNull(audit, "audit");
         this.contextResolver = requireNonNull(contextResolver, "contextResolver");
+        this.broadcaster = requireNonNull(broadcaster, "broadcaster");
+        // A change observed anywhere (a peer, or this instance) clears the local cache.
+        broadcaster.addListener(cache::invalidate);
+    }
+
+    /** Wiring without cross-instance invalidation (single instance — the cache TTL suffices). */
+    public FlagEngine(FlagStore store, FlagCache cache, FlagAuditListener audit,
+                      FlagContextResolver contextResolver) {
+        this(store, cache, audit, contextResolver, FlagChangeBroadcaster.NONE);
     }
 
     /** Minimal wiring: your {@link FlagStore}, no caching, no audit, no context resolver. */
@@ -134,6 +145,7 @@ public final class FlagEngine {
         Flag saved = store.saveFlag(flag);
         log.info("Flag '{}' rollout set to {}% by {}", flagName, percentage, actor);
         audit.onFlagChanged(new FlagChange(flagName, actor, "rollout=" + percentage + "%"));
+        changed();
         return saved;
     }
 
@@ -160,6 +172,7 @@ public final class FlagEngine {
         log.info("Flag '{}' override [{} {}] set to enabled={} by {}", flagName, scope, value, enabled, actor);
         audit.onFlagChanged(new FlagChange(flagName, actor,
                 "override " + scope + "=" + value + " enabled=" + enabled));
+        changed();
         return saved;
     }
 
@@ -170,6 +183,7 @@ public final class FlagEngine {
             audit.onFlagChanged(new FlagChange(existing.flagName(), actor,
                     "override removed " + existing.scope() + "=" + existing.value()));
         }
+        changed();
     }
 
     // ── internals ──────────────────────────────────────────────────────────────
@@ -179,7 +193,14 @@ public final class FlagEngine {
         Flag saved = store.saveFlag(flag);
         log.info("Flag '{}' set to enabled={} by {}", flagName, enabled, actor);
         audit.onFlagChanged(new FlagChange(flagName, actor, "enabled=" + enabled));
+        changed();
         return saved;
+    }
+
+    /** After a management write: clear this instance's cache now, and tell peers to. */
+    private void changed() {
+        cache.invalidate();
+        broadcaster.broadcastChange();
     }
 
     private void ensureFlagExists(String flagName) {

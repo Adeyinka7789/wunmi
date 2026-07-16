@@ -44,14 +44,25 @@ public final class TtlFlagCache implements FlagCache {
         return current().overrides.computeIfAbsent(key, k -> loader.get());
     }
 
+    @Override
+    public void invalidate() {
+        snapshot.set(null);
+    }
+
     private Snapshot current() {
-        long now = clock.millis();
-        Snapshot existing = snapshot.get();
-        if (existing != null && now < existing.expiryMillis) {
-            return existing;
+        // Retried rather than falling back to snapshot.get(): a concurrent invalidate() can null the
+        // reference between the get and the CAS, and that read would then hand back null.
+        while (true) {
+            long now = clock.millis();
+            Snapshot existing = snapshot.get();
+            if (existing != null && now < existing.expiryMillis) {
+                return existing;
+            }
+            Snapshot fresh = new Snapshot(now + ttlMillis);
+            if (snapshot.compareAndSet(existing, fresh)) {
+                return fresh;
+            }
         }
-        Snapshot fresh = new Snapshot(now + ttlMillis);
-        return snapshot.compareAndSet(existing, fresh) ? fresh : snapshot.get();
     }
 
     private static final class Snapshot {

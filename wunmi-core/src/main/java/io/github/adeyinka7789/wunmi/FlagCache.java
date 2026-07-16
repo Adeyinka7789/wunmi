@@ -20,6 +20,12 @@ public interface FlagCache {
     /** A single override, memoized by {@code key} (a {@code flag|scope|value} tuple). */
     Optional<FlagOverride> override(String key, Supplier<Optional<FlagOverride>> loader);
 
+    /**
+     * Drop any cached entries so the next lookup reloads. Called when a flag change is observed
+     * (see {@link FlagChangeBroadcaster}). Default no-op for caches that hold nothing durable.
+     */
+    default void invalidate() { }
+
     /** A cache that never caches — always calls the loader. */
     FlagCache NONE = new FlagCache() {
         @Override public Map<String, Flag> flags(Supplier<Map<String, Flag>> loader) {

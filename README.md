@@ -76,12 +76,12 @@ auto-configured — so with a datasource you need **zero** persistence code:
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-spring-boot-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-jdbc</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 
@@ -113,6 +113,26 @@ Defaults (override by declaring your own bean):
 | `FlagCache` | `RequestScopedFlagCache` — request-scoped, short-TTL fallback (`wunmi.cache-ttl-ms`, default 5000) |
 | `FlagContextResolver` | `FlagContext.EMPTY` (global resolution only) |
 | `FlagAuditListener` | no-op |
+| `FlagChangeBroadcaster` | `JdbcFlagChangeBroadcaster` when `wunmi-jdbc` + a `DataSource` are present, else none |
+
+## Running more than one instance
+
+By default a flag change only reaches other instances when their cache TTL lapses. With `wunmi-jdbc`
+on the classpath you get cross-instance invalidation for free: a change bumps a version counter in
+the database you already have, every instance polls it, and a bump clears their caches — no Redis or
+Kafka required.
+
+```properties
+wunmi.invalidation.enabled=true            # default; set false to skip the poller entirely
+wunmi.invalidation.poll-interval-ms=5000   # default; bounds how long a peer's change takes to land
+```
+
+This needs the `wunmi_flag_version` table (included in the bundled schema). If it's missing — say you
+manage the schema yourself and haven't added it — wunmi logs a warning at startup and falls back to
+TTL convergence rather than failing to boot.
+
+For broker-backed fan-out instead of polling, declare your own `FlagChangeBroadcaster` bean: call
+your listeners when a peer's message arrives, and publish from `broadcastChange()`.
 
 ## Admin console
 
@@ -124,7 +144,7 @@ API. It has no auth of its own — **secure `/wunmi/admin/**` behind your own se
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-admin-ui</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 

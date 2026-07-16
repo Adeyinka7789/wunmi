@@ -59,4 +59,17 @@ public class RequestScopedFlagCache implements FlagCache {
         }
         return cache.computeIfAbsent(key, k -> loader.get());
     }
+
+    @Override
+    public void invalidate() {
+        // Clear this request's view too, not just the shared fallback: a handler that changes a flag
+        // and then reads it must see its own write. Outside a request (the change poller) there is
+        // nothing bound and only the fallback applies.
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs != null) {
+            attrs.removeAttribute(FLAGS_ATTR, RequestAttributes.SCOPE_REQUEST);
+            attrs.removeAttribute(OVERRIDES_ATTR, RequestAttributes.SCOPE_REQUEST);
+        }
+        fallback.invalidate();
+    }
 }

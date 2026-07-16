@@ -1,12 +1,17 @@
 package io.github.adeyinka7789.wunmi.spring;
 
+import io.github.adeyinka7789.wunmi.FlagChangeBroadcaster;
 import io.github.adeyinka7789.wunmi.FlagStore;
+import io.github.adeyinka7789.wunmi.jdbc.JdbcFlagChangeBroadcaster;
 import io.github.adeyinka7789.wunmi.jdbc.JdbcFlagStore;
 import io.github.adeyinka7789.wunmi.jdbc.WunmiSchema;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -34,5 +39,29 @@ public class WunmiJdbcAutoConfiguration {
             WunmiSchema.initialize(dataSource);
         }
         return new JdbcFlagStore(dataSource);
+    }
+
+    /**
+     * Cross-instance cache invalidation with no extra infrastructure — a version counter in the
+     * datasource you already have. Disable with {@code wunmi.invalidation.enabled=false}, or
+     * declare your own {@link FlagChangeBroadcaster} bean for broker-backed fan-out.
+     */
+    @Bean
+    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnMissingBean(FlagChangeBroadcaster.class)
+    @ConditionalOnProperty(prefix = "wunmi.invalidation", name = "enabled", matchIfMissing = true)
+    public JdbcFlagChangeBroadcaster wunmiJdbcFlagChangeBroadcaster(DataSource dataSource,
+                                                                   WunmiProperties properties) {
+        return new JdbcFlagChangeBroadcaster(dataSource, properties.getInvalidation().getPollIntervalMs());
+    }
+
+    /**
+     * Starts polling once every singleton exists — so the {@code FlagEngine} has already registered
+     * its cache invalidation as a listener and no peer change can slip through unobserved.
+     */
+    @Bean
+    public SmartInitializingSingleton wunmiFlagBroadcasterStarter(
+            ObjectProvider<JdbcFlagChangeBroadcaster> broadcaster) {
+        return () -> broadcaster.ifAvailable(JdbcFlagChangeBroadcaster::start);
     }
 }
