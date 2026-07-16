@@ -1,0 +1,64 @@
+package io.github.adeyinka7789.wunmi.spring;
+
+import io.github.adeyinka7789.wunmi.FlagAuditListener;
+import io.github.adeyinka7789.wunmi.FlagCache;
+import io.github.adeyinka7789.wunmi.FlagContextResolver;
+import io.github.adeyinka7789.wunmi.FlagEngine;
+import io.github.adeyinka7789.wunmi.FlagStore;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+
+/**
+ * Auto-configuration for wunmi. Supply a {@link FlagStore} bean and you get a fully wired
+ * {@link FlagEngine}; everything else has a sensible default you can override by declaring your
+ * own bean:
+ *
+ * <ul>
+ *   <li>{@link FlagCache} → {@link RequestScopedFlagCache} (request-scoped + short TTL)</li>
+ *   <li>{@link FlagContextResolver} → {@link FlagContextResolver#EMPTY} (global resolution only —
+ *       declare your own to enable per-subject/segment overrides and rollout)</li>
+ *   <li>{@link FlagAuditListener} → {@link FlagAuditListener#NOOP}</li>
+ * </ul>
+ *
+ * The {@link RequiresFlagAspect} is registered so {@link RequiresFlag} works out of the box.
+ */
+@AutoConfiguration
+@EnableConfigurationProperties(WunmiProperties.class)
+public class WunmiAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public FlagCache wunmiFlagCache(WunmiProperties properties) {
+        return new RequestScopedFlagCache(properties.getCacheTtlMs());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public FlagContextResolver wunmiFlagContextResolver() {
+        return FlagContextResolver.EMPTY;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public FlagAuditListener wunmiFlagAuditListener() {
+        return FlagAuditListener.NOOP;
+    }
+
+    @Bean
+    @ConditionalOnBean(FlagStore.class)
+    @ConditionalOnMissingBean
+    public FlagEngine flagEngine(FlagStore store, FlagCache cache,
+                                 FlagAuditListener audit, FlagContextResolver contextResolver) {
+        return new FlagEngine(store, cache, audit, contextResolver);
+    }
+
+    @Bean
+    @ConditionalOnBean(FlagEngine.class)
+    @ConditionalOnMissingBean
+    public RequiresFlagAspect requiresFlagAspect(FlagEngine flagEngine) {
+        return new RequiresFlagAspect(flagEngine);
+    }
+}
