@@ -6,7 +6,7 @@
 
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <packaging>pom</packaging>
 
     <name>wunmi</name>
@@ -189,6 +189,14 @@
                                 <goals><goal>sign</goal></goals>
                             </execution>
                         </executions>
+                        <configuration>
+                            <!-- gpg 2.4 ignores a supplied passphrase unless pinentry is looped
+                                 back; required for a non-interactive Maven deploy. -->
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
                     </plugin>
                     <plugin>
                         <groupId>org.sonatype.central</groupId>
