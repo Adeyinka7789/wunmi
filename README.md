@@ -57,22 +57,53 @@ FlagEngine flags = new FlagEngine(myFlagStore, new TtlFlagCache(5000),
 flags.isOn(Feature.BETA_CHECKOUT);   // resolves for the current user + plan
 ```
 
-Manage flags:
+Two ways to read a flag:
 
 ```java
-flags.enable("DARK_MODE", "admin@acme.com");
-flags.setRollout("BETA_CHECKOUT", 25, "admin@acme.com");                 // 25% of subjects
-flags.putOverride("BETA_CHECKOUT", Scope.SUBJECT, userId, true, "VIP", "admin@acme.com");
+flags.isOn(Feature.BETA_CHECKOUT);   // FULL resolution: kill switch → overrides → rollout, for the current context
+flags.isEnabled(Feature.BETA_CHECKOUT);   // GLOBAL switch only — ignores subject/segment/rollout
+flags.require(Feature.BETA_CHECKOUT);   // throws FlagDisabledException when off (map it to a 404)
 ```
+
+Manage flags (typically from your admin UI or a migration — every write takes an `actor` for the audit trail):
+
+```java
+import io.github.adeyinka7789.wunmi.FlagOverride.Scope;
+
+flags.enable("DARK_MODE", "admin@acme.com");
+flags.disable("BETA_CHECKOUT", "admin@acme.com");                        // kill switch (absolute)
+flags.setRollout("BETA_CHECKOUT", 25, "admin@acme.com");                 // 25% of subjects
+flags.putOverride("BETA_CHECKOUT", Scope.SUBJECT, userId, true, "VIP", "admin@acme.com");  // force on for one user
+flags.putOverride("BETA_CHECKOUT", Scope.SEGMENT, "enterprise", true, null, "admin@acme.com"); // …or a whole plan
+```
+
+> **Allow-listing a few subjects while off for the rest:** don't use the kill switch (`disable`) — it's
+> absolute and no override can revive it. Instead keep the flag enabled, `setRollout(..., 0, ...)`, then
+> add `Scope.SUBJECT` overrides — overrides bypass rollout but not the kill switch.
 
 ## Persistence
 
-Implement `FlagStore` over your own database, or use the bundled **`wunmi-jdbc`** — a
-`FlagStore` over any `DataSource`, no ORM:
+Use the bundled **`wunmi-jdbc`** — a `FlagStore` over any `DataSource`, no ORM:
 
 ```java
 WunmiSchema.initialize(dataSource);              // idempotent CREATE TABLE IF NOT EXISTS
 FlagStore store = new JdbcFlagStore(dataSource);
+```
+
+…or implement the eight-method `FlagStore` SPI over your own storage (Mongo, an API, an in-memory
+map for tests):
+
+```java
+public interface FlagStore {
+    Optional<Flag>         findFlag(String name);
+    List<Flag>             findAllFlags();
+    Flag                   saveFlag(Flag flag);
+    Optional<FlagOverride> findOverride(String flagName, FlagOverride.Scope scope, String value);
+    List<FlagOverride>     findOverrides(String flagName);
+    FlagOverride           saveOverride(FlagOverride override);
+    Optional<FlagOverride> findOverrideById(UUID id);
+    void                   deleteOverride(UUID id);
+}
 ```
 
 ## Spring Boot
@@ -84,12 +115,12 @@ auto-configured — so with a datasource you need **zero** persistence code:
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-spring-boot-starter</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-jdbc</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
@@ -121,6 +152,24 @@ the segment drives segment overrides:
 ```java
 @RequiresFlag(value = "BETA_CHECKOUT", subject = "#user.id", segment = "#user.plan")
 public Receipt checkout(User user, Cart cart) { ... }
+```
+
+Or inject the `FlagEngine` and branch on a flag anywhere in your own code (not just to gate a whole
+method) — this is the common case for conditional logic:
+
+```java
+@Service
+@RequiredArgsConstructor
+class CheckoutService {
+    private final FlagEngine flags;   // the auto-configured bean
+
+    Receipt checkout(Cart cart) {
+        if (flags.isOn(Feature.BETA_CHECKOUT)) {   // resolves against the FlagContextResolver
+            return newCheckout(cart);
+        }
+        return legacyCheckout(cart);
+    }
+}
 ```
 
 Defaults (override by declaring your own bean):
