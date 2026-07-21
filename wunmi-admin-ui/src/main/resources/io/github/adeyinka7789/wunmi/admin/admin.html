@@ -181,24 +181,28 @@ function flagCard(f) {
 
   const rolloutInput = row.querySelector('.rollout');
 
-  row.querySelector('[data-a=toggle]').onclick = (ev) => {
+  // Apply the flag update AFTER withBusy resolves — withBusy restores the button's
+  // pre-spinner HTML in its finally, which would otherwise clobber the new toggle label.
+  row.querySelector('[data-a=toggle]').onclick = async (ev) => {
     const enabling = !currentEnabled(card);
     if (!enabling && !confirm(`Disable "${f.name}"? This turns the feature off everywhere it's gated.`)) return;
-    withBusy(ev.currentTarget, async () => {
-      const updated = await api('POST', `/api/flags/${encodeURIComponent(f.name)}/` + (enabling ? 'enable' : 'disable'));
+    const updated = await withBusy(ev.currentTarget, () =>
+      api('POST', `/api/flags/${encodeURIComponent(f.name)}/` + (enabling ? 'enable' : 'disable')));
+    if (updated) {
       applyFlag(card, updated);
       toast(`${f.name} ${updated.enabled ? 'enabled' : 'disabled'}.`, 'ok');
-    });
+    }
   };
 
-  row.querySelector('[data-a=save-rollout]').onclick = (ev) => {
+  row.querySelector('[data-a=save-rollout]').onclick = async (ev) => {
     const pct = parseInt(rolloutInput.value, 10);
     if (isNaN(pct) || pct < 0 || pct > 100) { toast('Rollout must be a whole number between 0 and 100.', 'err'); return; }
-    withBusy(ev.currentTarget, async () => {
-      const updated = await api('PUT', `/api/flags/${encodeURIComponent(f.name)}/rollout`, { percentage: pct });
+    const updated = await withBusy(ev.currentTarget, () =>
+      api('PUT', `/api/flags/${encodeURIComponent(f.name)}/rollout`, { percentage: pct }));
+    if (updated) {
       applyFlag(card, updated);
       toast(`${f.name} rollout set to ${updated.rolloutPercentage}%.`, 'ok');
-    });
+    }
   };
 
   row.querySelector('[data-a=overrides]').onclick = (ev) => toggleOverrides(f.name, ov, ev.currentTarget);
