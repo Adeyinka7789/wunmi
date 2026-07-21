@@ -5,6 +5,7 @@ import io.github.adeyinka7789.wunmi.FlagCache;
 import io.github.adeyinka7789.wunmi.FlagChangeBroadcaster;
 import io.github.adeyinka7789.wunmi.FlagContextResolver;
 import io.github.adeyinka7789.wunmi.FlagEngine;
+import io.github.adeyinka7789.wunmi.FlagEvaluationListener;
 import io.github.adeyinka7789.wunmi.FlagStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -23,6 +24,8 @@ import org.springframework.context.annotation.Bean;
  *   <li>{@link FlagContextResolver} → {@link FlagContextResolver#EMPTY} (global resolution only —
  *       declare your own to enable per-subject/segment overrides and rollout)</li>
  *   <li>{@link FlagAuditListener} → {@link FlagAuditListener#NOOP}</li>
+ *   <li>{@link FlagEvaluationListener} → {@link FlagEvaluationListener#NOOP} (declare your own —
+ *       e.g. a Micrometer adapter — to record per-evaluation metrics)</li>
  *   <li>{@link FlagChangeBroadcaster} → the bundled JDBC one when {@code wunmi-jdbc} and a
  *       {@code DataSource} are present (see {@link WunmiJdbcAutoConfiguration}), otherwise
  *       {@link FlagChangeBroadcaster#NONE} — declare your own for Redis/Kafka fan-out</li>
@@ -53,13 +56,20 @@ public class WunmiAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public FlagEvaluationListener wunmiFlagEvaluationListener() {
+        return FlagEvaluationListener.NOOP;
+    }
+
+    @Bean
     @ConditionalOnBean(FlagStore.class)
     @ConditionalOnMissingBean
     public FlagEngine flagEngine(FlagStore store, FlagCache cache,
                                  FlagAuditListener audit, FlagContextResolver contextResolver,
-                                 ObjectProvider<FlagChangeBroadcaster> broadcaster) {
+                                 ObjectProvider<FlagChangeBroadcaster> broadcaster,
+                                 FlagEvaluationListener evaluationListener) {
         return new FlagEngine(store, cache, audit, contextResolver,
-                broadcaster.getIfAvailable(() -> FlagChangeBroadcaster.NONE));
+                broadcaster.getIfAvailable(() -> FlagChangeBroadcaster.NONE), evaluationListener);
     }
 
     @Bean

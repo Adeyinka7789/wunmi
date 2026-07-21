@@ -40,6 +40,7 @@
         <module>wunmi-jdbc</module>
         <module>wunmi-spring-boot-starter</module>
         <module>wunmi-admin-ui</module>
+        <module>examples/spring-boot-demo</module>
     </modules>
 
     <properties>

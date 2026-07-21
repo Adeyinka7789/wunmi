@@ -1,6 +1,8 @@
 package io.github.adeyinka7789.wunmi;
 
 import io.github.adeyinka7789.wunmi.FlagAuditListener.FlagChange;
+import io.github.adeyinka7789.wunmi.FlagEvaluationListener.FlagEvaluation;
+import io.github.adeyinka7789.wunmi.FlagEvaluationListener.Reason;
 import io.github.adeyinka7789.wunmi.FlagOverride.Scope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,8 +15,8 @@ import java.util.stream.Collectors;
 
 /**
  * The feature-flag engine: resolves whether a flag is on and manages flag/override state.
- * Framework-free — it depends only on the four SPIs ({@link FlagStore}, {@link FlagCache},
- * {@link FlagAuditListener}, {@link FlagContextResolver}) and SLF4J.
+ * Framework-free — it depends only on the SPIs ({@link FlagStore}, {@link FlagCache},
+ * {@link FlagAuditListener}, {@link FlagContextResolver}, {@link FlagEvaluationListener}) and SLF4J.
  *
  * <h2>Resolution order</h2>
  * {@link #resolve(String, String, String)} short-circuits on the first layer that applies:
@@ -41,17 +43,26 @@ public final class FlagEngine {
     private final FlagAuditListener audit;
     private final FlagContextResolver contextResolver;
     private final FlagChangeBroadcaster broadcaster;
+    private final FlagEvaluationListener evaluationListener;
 
-    /** Full wiring, including cross-instance cache invalidation via {@code broadcaster}. */
+    /** Full wiring, including cross-instance cache invalidation and an evaluation listener. */
     public FlagEngine(FlagStore store, FlagCache cache, FlagAuditListener audit,
-                      FlagContextResolver contextResolver, FlagChangeBroadcaster broadcaster) {
+                      FlagContextResolver contextResolver, FlagChangeBroadcaster broadcaster,
+                      FlagEvaluationListener evaluationListener) {
         this.store = requireNonNull(store, "store");
         this.cache = requireNonNull(cache, "cache");
         this.audit = requireNonNull(audit, "audit");
         this.contextResolver = requireNonNull(contextResolver, "contextResolver");
         this.broadcaster = requireNonNull(broadcaster, "broadcaster");
+        this.evaluationListener = requireNonNull(evaluationListener, "evaluationListener");
         // A change observed anywhere (a peer, or this instance) clears the local cache.
         broadcaster.addListener(cache::invalidate);
+    }
+
+    /** Full wiring with cross-instance invalidation but no evaluation metrics. */
+    public FlagEngine(FlagStore store, FlagCache cache, FlagAuditListener audit,
+                      FlagContextResolver contextResolver, FlagChangeBroadcaster broadcaster) {
+        this(store, cache, audit, contextResolver, broadcaster, FlagEvaluationListener.NOOP);
     }
 
     /** Wiring without cross-instance invalidation (single instance — the cache TTL suffices). */
@@ -94,32 +105,42 @@ public final class FlagEngine {
      * (and rollout, which needs a subject) are skipped.
      */
     public boolean resolve(String flagName, String subjectId, String segment) {
+        FlagEvaluation evaluation = evaluate(flagName, subjectId, segment);
+        evaluationListener.onFlagEvaluated(evaluation);
+        return evaluation.enabled();
+    }
+
+    /** The layered decision, tagged with the {@link Reason} that produced it. */
+    private FlagEvaluation evaluate(String flagName, String subjectId, String segment) {
         Flag flag = cache.flags(this::loadAllFlags).get(flagName);
         if (flag == null) {
-            log.warn("Feature flag '{}' is not registered; defaulting to disabled", flagName);
-            return false;
+            log.warn("Feature flag '{}' is not registered; defaulting to disabled.{}",
+                    flagName, suggestion(flagName));
+            return new FlagEvaluation(flagName, false, Reason.NOT_FOUND);
         }
         if (!flag.enabled()) {
-            return false;
+            return new FlagEvaluation(flagName, false, Reason.GLOBAL_DISABLED);
         }
         if (subjectId != null) {
             Optional<FlagOverride> o = cachedOverride(flagName, Scope.SUBJECT, subjectId);
             if (o.isPresent()) {
-                return o.get().enabled();
+                return new FlagEvaluation(flagName, o.get().enabled(), Reason.SUBJECT_OVERRIDE);
             }
         }
         if (segment != null) {
             Optional<FlagOverride> o = cachedOverride(flagName, Scope.SEGMENT, segment);
             if (o.isPresent()) {
-                return o.get().enabled();
+                return new FlagEvaluation(flagName, o.get().enabled(), Reason.SEGMENT_OVERRIDE);
             }
         }
         int rollout = flag.rolloutPercentage();
         if (subjectId != null && rollout < 100) {
             int bucket = Math.floorMod((subjectId + flagName).hashCode(), 100);
-            return bucket < rollout;
+            boolean included = bucket < rollout;
+            return new FlagEvaluation(flagName, included,
+                    included ? Reason.ROLLOUT_INCLUDED : Reason.ROLLOUT_EXCLUDED);
         }
-        return true;
+        return new FlagEvaluation(flagName, true, Reason.DEFAULT_ON);
     }
 
     /** Throw {@link FlagDisabledException} unless the flag is on for the current context. */
@@ -221,6 +242,45 @@ public final class FlagEngine {
     private Optional<FlagOverride> cachedOverride(String flagName, Scope scope, String value) {
         String key = flagName + '|' + scope + '|' + value;
         return cache.override(key, () -> store.findOverride(flagName, scope, value));
+    }
+
+    /**
+     * A " Did you mean 'X'?" hint for an unregistered flag when a registered one is a near typo,
+     * else the empty string. Runs only on the (rare) not-found path, so the scan is fine.
+     */
+    private String suggestion(String flagName) {
+        String best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        for (String candidate : cache.flags(this::loadAllFlags).keySet()) {
+            int distance = levenshtein(flagName, candidate);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+        // Only suggest a genuinely close match (scaled to the name's length).
+        int threshold = Math.max(2, flagName.length() / 3);
+        return best != null && bestDistance <= threshold ? " Did you mean '" + best + "'?" : "";
+    }
+
+    /** Classic edit distance, used only for typo suggestions. */
+    private static int levenshtein(String a, String b) {
+        int[] prev = new int[b.length() + 1];
+        int[] curr = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) {
+            prev[j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            curr[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                curr[j] = Math.min(Math.min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            int[] swap = prev;
+            prev = curr;
+            curr = swap;
+        }
+        return prev[b.length()];
     }
 
     private static <T> T requireNonNull(T value, String name) {

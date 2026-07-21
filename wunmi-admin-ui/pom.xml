@@ -40,6 +40,14 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Optional: only referenced when wunmi.admin.require-role is set, to gate the console
+             behind a granted authority. Apps that secure /wunmi/admin themselves don't need it. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

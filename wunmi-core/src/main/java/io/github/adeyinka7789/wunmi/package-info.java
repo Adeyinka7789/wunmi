@@ -2,7 +2,7 @@
  * wunmi — a small, robust feature-flag engine for Java.
  *
  * <p>Layered resolution (global kill switch → per-subject/segment overrides → percentage rollout)
- * over four pluggable SPIs, with no framework dependency (only SLF4J).
+ * over five pluggable SPIs, with no framework dependency (only SLF4J).
  *
  * <h2>Quick start</h2>
  * <pre>{@code
@@ -20,7 +20,8 @@
  *       {@link io.github.adeyinka7789.wunmi.FlagCache} (caching — or {@code NONE}/{@link
  *       io.github.adeyinka7789.wunmi.TtlFlagCache}), {@link io.github.adeyinka7789.wunmi.FlagAuditListener}
  *       (audit — or {@code NOOP}), {@link io.github.adeyinka7789.wunmi.FlagContextResolver}
- *       (who is asking — or {@code EMPTY}).</li>
+ *       (who is asking — or {@code EMPTY}), {@link io.github.adeyinka7789.wunmi.FlagEvaluationListener}
+ *       (meter each evaluation — or {@code NOOP}).</li>
  *   <li>Model: {@link io.github.adeyinka7789.wunmi.Flag},
  *       {@link io.github.adeyinka7789.wunmi.FlagOverride},
  *       {@link io.github.adeyinka7789.wunmi.FlagContext}.</li>

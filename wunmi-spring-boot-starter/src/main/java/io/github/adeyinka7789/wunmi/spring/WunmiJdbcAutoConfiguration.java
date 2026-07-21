@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -23,10 +24,12 @@ import javax.sql.DataSource;
  * persistence with zero code (just a datasource). Declaring your own {@code FlagStore} bean
  * overrides this. Set {@code wunmi.jdbc.initialize-schema=true} to create the tables at startup.
  *
- * <p>Ordered before {@link WunmiAutoConfiguration} so its {@code FlagStore} is registered in time
- * for the {@code FlagEngine}'s {@code @ConditionalOnBean(FlagStore.class)}.
+ * <p>Ordered after {@link DataSourceAutoConfiguration} so the {@link DataSource} exists when the
+ * {@code @ConditionalOnBean(DataSource.class)} below is evaluated, and before
+ * {@link WunmiAutoConfiguration} so its {@code FlagStore} is registered in time for the
+ * {@code FlagEngine}'s {@code @ConditionalOnBean(FlagStore.class)}.
  */
-@AutoConfiguration(before = WunmiAutoConfiguration.class)
+@AutoConfiguration(after = DataSourceAutoConfiguration.class, before = WunmiAutoConfiguration.class)
 @ConditionalOnClass(JdbcFlagStore.class)
 @EnableConfigurationProperties(WunmiProperties.class)
 public class WunmiJdbcAutoConfiguration {

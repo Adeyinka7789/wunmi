@@ -1,8 +1,16 @@
 # wunmi
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.adeyinka7789/wunmi-core.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.adeyinka7789/wunmi-core)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+![Java 17+](https://img.shields.io/badge/Java-17%2B-blue.svg)
+![In production at admtechub](https://img.shields.io/badge/in%20production-hr.admtechub.com-brightgreen.svg)
+
 A small, robust feature-flag engine for Java. Kill switches, per-subject and per-segment
-overrides, and percentage rollouts — over four pluggable SPIs, with no framework dependency in
+overrides, and percentage rollouts — over five pluggable SPIs, with no framework dependency in
 the core (only SLF4J).
+
+> Extracted from production at `hr.admtechub.com` — where it runs payroll kill switches, staged
+> HR-form rollouts, and per-tenant beta features — then made framework-free for everyone else.
 
 - **`wunmi-core`** — the engine. Pure Java, framework-free.
 - **`wunmi-jdbc`** — a ready-made `FlagStore` over any JDBC database, with a portable schema.
@@ -106,6 +114,15 @@ You then get a `FlagEngine` bean and the method gate:
 public Receipt checkout(Cart cart) { ... }
 ```
 
+Prefer to target the check inline instead of wiring a `FlagContextResolver`? Point `subject` and
+`segment` at the method arguments with SpEL — the subject drives overrides and rollout bucketing,
+the segment drives segment overrides:
+
+```java
+@RequiresFlag(value = "BETA_CHECKOUT", subject = "#user.id", segment = "#user.plan")
+public Receipt checkout(User user, Cart cart) { ... }
+```
+
 Defaults (override by declaring your own bean):
 
 | SPI | Default |
@@ -113,7 +130,24 @@ Defaults (override by declaring your own bean):
 | `FlagCache` | `RequestScopedFlagCache` — request-scoped, short-TTL fallback (`wunmi.cache-ttl-ms`, default 5000) |
 | `FlagContextResolver` | `FlagContext.EMPTY` (global resolution only) |
 | `FlagAuditListener` | no-op |
+| `FlagEvaluationListener` | no-op (declare one to record per-evaluation metrics) |
 | `FlagChangeBroadcaster` | `JdbcFlagChangeBroadcaster` when `wunmi-jdbc` + a `DataSource` are present, else none |
+
+### Metrics
+
+Every resolution is reported to a `FlagEvaluationListener` with the flag name, the result, and the
+`Reason` that decided it (`SUBJECT_OVERRIDE`, `ROLLOUT_INCLUDED`, `NOT_FOUND`, …). Declare one to
+feed Micrometer — flag name and reason are low-cardinality and safe as tags (the subject id is
+deliberately not exposed):
+
+```java
+@Bean
+FlagEvaluationListener flagMetrics(MeterRegistry registry) {
+    return e -> registry.counter("wunmi.evaluations",
+            "flag", e.flagName(), "result", String.valueOf(e.enabled()),
+            "reason", e.reason().name()).increment();
+}
+```
 
 ## Running more than one instance
 
@@ -138,15 +172,37 @@ your listeners when a peer's message arrives, and publish from `broadcastChange(
 
 Add `wunmi-admin-ui` and a dependency-free management page appears at **`/wunmi/admin`**
 (list/add flags, toggle, set rollout, add/remove subject & segment overrides) over a small JSON
-API. It has no auth of its own — **secure `/wunmi/admin/**` behind your own security config.**
+API. **Secure `/wunmi/admin/**` behind your own security config.**
 
 ```xml
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-admin-ui</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
+
+For a quick built-in gate, set `wunmi.admin.require-role`. When Spring Security is on the classpath,
+every `/wunmi/admin/**` request must then carry that granted authority (matched with or without the
+`ROLE_` prefix), else `403`:
+
+```properties
+wunmi.admin.require-role=ADMIN
+```
+
+This is a convenience over your existing Spring Security setup, not a replacement — it reads the
+`Authentication` your filter chain already established.
+
+## Example app
+
+A runnable Spring Boot demo lives in [`examples/spring-boot-demo`](examples/spring-boot-demo) —
+the starter + JDBC store over H2 + the admin console, with two seeded flags. Clone and:
+
+```bash
+mvn -pl examples/spring-boot-demo -am spring-boot:run
+```
+
+It doubles as the project's end-to-end auto-configuration test.
 
 ## The SPIs
 
@@ -156,6 +212,7 @@ API. It has no auth of its own — **secure `/wunmi/admin/**` behind your own se
 | `FlagCache` | cache reads | `FlagCache.NONE`, `TtlFlagCache`, `RequestScopedFlagCache` (Spring) |
 | `FlagAuditListener` | record changes | `FlagAuditListener.NOOP` |
 | `FlagContextResolver` | say who is asking | `FlagContextResolver.EMPTY` |
+| `FlagEvaluationListener` | meter each evaluation | `FlagEvaluationListener.NOOP` |
 
 ## License
 

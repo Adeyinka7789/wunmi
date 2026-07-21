@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:wunmi-demo;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true   # http://localhost:8080/h2-console to peek at the wunmi_* tables
+
+wunmi:
+  jdbc:
+    initialize-schema: true   # create the wunmi_* tables at startup (fine for a demo / dev)
+  # admin:
+  #   require-role: ADMIN     # uncomment (with Spring Security on the classpath) to gate /wunmi/admin
