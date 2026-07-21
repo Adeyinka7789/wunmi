@@ -115,12 +115,12 @@ auto-configured — so with a datasource you need **zero** persistence code:
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-jdbc</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -227,7 +227,7 @@ API. **Secure `/wunmi/admin/**` behind your own security config.**
 <dependency>
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-admin-ui</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -241,6 +241,38 @@ wunmi.admin.require-role=ADMIN
 
 This is a convenience over your existing Spring Security setup, not a replacement — it reads the
 `Authentication` your filter chain already established.
+
+### Domain-aware override pickers (optional)
+
+Out of the box the console labels the override scopes generically (`SUBJECT` / `SEGMENT`) and takes
+their values as free text — correct for any app, but it can't know that "SUBJECT" means "User" here,
+or which segments are valid. Declare a `WunmiAdminMetadata` bean and the console renders your terms
+plus real pickers: a dropdown of your segments and, optionally, a typeahead for subjects.
+
+```java
+@Bean
+WunmiAdminMetadata flagAdminMetadata(UserDirectory users) {
+    return new WunmiAdminMetadata() {
+        public String subjectLabel() { return "User"; }
+        public String segmentLabel() { return "Plan"; }
+        public List<Option> segments() {
+            return List.of(new Option("FREE", "Free"), new Option("PRO", "Pro"));
+        }
+        public boolean supportsSubjectSearch() { return true; }
+        public List<Option> searchSubjects(String query) {
+            return users.search(query).stream()          // your lookup, capped
+                       .map(u -> new Option(u.id(), u.displayName())).toList();
+        }
+    };
+}
+```
+
+Every method has a default, so implement only what fits your domain — the values you store
+(`Option.value`) are exactly what the engine matches at resolution time. **This is not tied to
+multi-tenancy:** SUBJECT is simply one identity (a user, tenant, customer, device…) and SEGMENT is
+a group (a plan, cohort, region…). Single-tenant apps typically map SUBJECT to a user, or skip the
+bean entirely and rely on the global toggle + rollout. With no bean present, the console keeps its
+free-text inputs and everything still works.
 
 ## Example app
 

@@ -6,7 +6,7 @@
 
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-parent</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0</version>
     <packaging>pom</packaging>
 
     <name>wunmi</name>
@@ -209,12 +209,12 @@
                             <autoPublish>true</autoPublish>
                             <!-- The demo module is a sample, not a library. maven.deploy.skip does
                                  NOT keep it out of the Central bundle (this plugin stages from its
-                                 own dir), so exclude it explicitly here. -->
+                                 own dir). excludeArtifacts is a List<String> matched by artifactId
+                                 (nested groupId/artifactId elements fail to parse). Belt-and-braces:
+                                 the release is also deployed with -pl '!examples/spring-boot-demo'
+                                 so the demo artifact never enters the reactor bundle at all. -->
                             <excludeArtifacts>
-                                <artifact>
-                                    <groupId>io.github.adeyinka7789</groupId>
-                                    <artifactId>wunmi-example-spring-boot</artifactId>
-                                </artifact>
+                                <artifact>wunmi-example-spring-boot</artifact>
                             </excludeArtifacts>
                         </configuration>
                     </plugin>
