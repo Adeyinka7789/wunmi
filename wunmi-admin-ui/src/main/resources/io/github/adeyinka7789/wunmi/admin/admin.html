@@ -8,10 +8,12 @@
   :root {
     --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
     --text:#e6e8ec; --muted:#9aa3b2; --accent:#5b8cff; --on:#3fb950; --off:#8b949e; --danger:#f85149;
+    --ok-bg:#132b1a; --ok-fg:#5ddb7f; --err-bg:#2b1416; --err-fg:#ff8a80;
   }
   @media (prefers-color-scheme: light) {
     :root { --bg:#f6f7f9; --panel:#fff; --panel2:#f0f2f5; --line:#e2e5ea;
-            --text:#1c2027; --muted:#5b6472; --accent:#2f6bff; }
+            --text:#1c2027; --muted:#5b6472; --accent:#2f6bff;
+            --ok-bg:#e7f6ec; --ok-fg:#1a7f37; --err-bg:#fdecec; --err-fg:#b42318; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
@@ -19,148 +21,305 @@
   .wrap { max-width:960px; margin:0 auto; padding:28px 20px 60px; }
   h1 { font-size:20px; margin:0; letter-spacing:.2px; }
   h1 span { color:var(--muted); font-weight:400; }
-  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:22px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:22px; flex-wrap:wrap; }
   .new { display:flex; gap:8px; }
   input, select { background:var(--panel2); border:1px solid var(--line); color:var(--text);
                   border-radius:8px; padding:7px 10px; font:inherit; }
   input:focus, select:focus { outline:2px solid var(--accent); outline-offset:-1px; }
   button { border:1px solid var(--line); background:var(--panel2); color:var(--text);
-           border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
-  button:hover { border-color:var(--accent); }
+           border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer;
+           display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:34px; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.65; cursor:default; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-  button.link { border:none; background:none; color:var(--muted); padding:4px 6px; }
-  button.link:hover { color:var(--accent); }
+  button.danger { color:var(--danger); }
+  button.danger:hover:not(:disabled) { border-color:var(--danger); }
+  button.link { border:none; background:none; color:var(--muted); padding:4px 6px; min-height:auto; }
+  button.link:hover:not(:disabled) { color:var(--accent); }
+  button.link.danger:hover:not(:disabled) { color:var(--danger); }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; margin-bottom:12px; }
+  .card.disabled { opacity:.72; }
   .row { display:flex; align-items:center; gap:14px; padding:14px 16px; }
-  .name { font-weight:600; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .name { font-weight:600; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; }
   .grow { flex:1; }
-  .badge { font-size:12px; font-weight:600; padding:2px 9px; border-radius:20px; }
+  .badge { font-size:12px; font-weight:600; padding:2px 9px; border-radius:20px; white-space:nowrap; }
   .badge.on { color:#fff; background:var(--on); }
   .badge.off { color:#fff; background:var(--off); }
   .muted { color:var(--muted); }
   .rollout { width:64px; text-align:right; }
-  .ov { border-top:1px solid var(--line); padding:12px 16px; display:none; }
+  .ov { border-top:1px solid var(--line); padding:14px 16px; display:none; }
   .ov.open { display:block; }
-  .ov table { width:100%; border-collapse:collapse; margin-bottom:10px; }
-  .ov td { padding:6px 4px; border-bottom:1px solid var(--line); }
+  .ov table { width:100%; border-collapse:collapse; margin-bottom:12px; }
+  .ov td, .ov th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; }
+  .ov th { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:600; }
   .ov .form { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .scope { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
   .empty { color:var(--muted); padding:40px; text-align:center; }
-  #err { color:var(--danger); margin-bottom:14px; min-height:18px; }
+  .ovmsg { min-height:0; }
+  .inline-err { color:var(--err-fg); background:var(--err-bg); border-radius:8px; padding:8px 11px; margin:8px 0 0; font-size:13px; }
+  /* spinner */
+  .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor;
+          border-right-color:transparent; border-radius:50%; animation:spin .6s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  /* toasts */
+  #toasts { position:fixed; top:16px; right:16px; display:flex; flex-direction:column; gap:8px; z-index:1000; max-width:min(380px,90vw); }
+  .toast { padding:10px 14px; border-radius:9px; font-size:13px; box-shadow:0 6px 24px rgba(0,0,0,.28);
+           border:1px solid var(--line); animation:slidein .18s ease; word-break:break-word; }
+  .toast.ok { background:var(--ok-bg); color:var(--ok-fg); border-color:transparent; }
+  .toast.err { background:var(--err-bg); color:var(--err-fg); border-color:transparent; }
+  @keyframes slidein { from { transform:translateX(12px); opacity:0; } to { transform:none; opacity:1; } }
+  .spacer { height:1px; }
 </style>
 </head>
 <body>
+<div id="toasts"></div>
 <div class="wrap">
   <header>
     <h1>wunmi <span>· feature flags</span></h1>
     <div class="new">
       <input id="newName" placeholder="NEW_FLAG_NAME" autocomplete="off">
-      <button class="primary" onclick="createFlag()">Add flag</button>
+      <button class="primary" id="addFlagBtn">Add flag</button>
+      <button id="refreshBtn" title="Reload">Refresh</button>
     </div>
   </header>
-  <div id="err"></div>
   <div id="list"><div class="empty">Loading…</div></div>
 </div>
 
 <script>
 const BASE = "__BASE__";
-const el = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild; };
 const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
 
-function showErr(m) { document.getElementById('err').textContent = m || ''; }
+/** Parse a fragment of HTML into a single detached element (first element node). */
+function el(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
 
+// ── toasts ──────────────────────────────────────────────────────────────────
+function toast(msg, type) {
+  const t = el(`<div class="toast ${type === 'err' ? 'err' : 'ok'}">${esc(msg)}</div>`);
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0';
+                     setTimeout(() => t.remove(), 300); }, type === 'err' ? 6000 : 3000);
+}
+
+// ── fetch with real error bodies ─────────────────────────────────────────────
 async function api(method, path, body) {
   const res = await fetch(BASE + path, {
     method, headers: body ? {'Content-Type':'application/json'} : {},
     body: body ? JSON.stringify(body) : undefined
   });
-  if (!res.ok) throw new Error(method + ' ' + path + ' → ' + res.status);
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.text()).slice(0, 300); } catch (_) {}
+    throw new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+  }
   return res.status === 204 ? null : res.json();
 }
 
+/**
+ * Run an async action with the triggering button showing a spinner and disabled
+ * (also guards against double-submit). Errors surface as a toast unless onError handles them.
+ */
+async function withBusy(btn, fn, onError) {
+  if (btn.dataset.busy) return;
+  btn.dataset.busy = '1';
+  const prev = btn.innerHTML;
+  btn.style.minWidth = btn.offsetWidth + 'px';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>';
+  try {
+    return await fn();
+  } catch (e) {
+    if (onError) onError(e); else toast(e.message, 'err');
+  } finally {
+    btn.dataset.busy = '';
+    btn.disabled = false;
+    btn.innerHTML = prev;
+    btn.style.minWidth = '';
+  }
+}
+
+// ── list ─────────────────────────────────────────────────────────────────────
 async function load() {
-  showErr('');
+  const list = document.getElementById('list');
   try {
     const flags = await api('GET', '/api/flags');
-    const list = document.getElementById('list');
     list.innerHTML = '';
     if (!flags.length) { list.appendChild(el('<div class="empty">No flags yet. Add one above.</div>')); return; }
-    flags.sort((a,b) => a.name.localeCompare(b.name)).forEach(f => list.appendChild(flagCard(f)));
-  } catch (e) { showErr(e.message); }
+    flags.sort((a, b) => a.name.localeCompare(b.name)).forEach(f => list.appendChild(flagCard(f)));
+  } catch (e) {
+    list.innerHTML = '';
+    list.appendChild(el(`<div class="empty">Failed to load flags.<br><span class="muted">${esc(e.message)}</span></div>`));
+    toast(e.message, 'err');
+  }
+}
+
+function badgeHtml(enabled) {
+  return enabled ? '<span class="badge on">Enabled</span>' : '<span class="badge off">Disabled</span>';
 }
 
 function flagCard(f) {
   const card = el('<div class="card"></div>');
-  const badge = f.enabled ? '<span class="badge on">Enabled</span>' : '<span class="badge off">Disabled</span>';
-  card.appendChild(el(`
+  card.dataset.flag = f.name;
+  const row = el(`
     <div class="row">
       <span class="name">${esc(f.name)}</span>
-      ${badge}
+      <span data-badge>${badgeHtml(f.enabled)}</span>
       <span class="grow"></span>
       <span class="muted">rollout</span>
-      <input class="rollout" type="number" min="0" max="100" value="${f.rolloutPercentage}">
+      <input class="rollout" type="number" min="0" max="100" value="${esc(f.rolloutPercentage)}">
       <button class="link" data-a="save-rollout">save</button>
       <button data-a="toggle">${f.enabled ? 'Disable' : 'Enable'}</button>
       <button class="link" data-a="overrides">overrides</button>
-    </div>
-    <div class="ov"></div>`));
-  const rolloutInput = card.querySelector('.rollout');
-  const ov = card.querySelector('.ov');
-  card.querySelector('[data-a=toggle]').onclick = () => act('POST', `/api/flags/${encodeURIComponent(f.name)}/` + (f.enabled ? 'disable' : 'enable'));
-  card.querySelector('[data-a=save-rollout]').onclick = () => act('PUT', `/api/flags/${encodeURIComponent(f.name)}/rollout`, {percentage: parseInt(rolloutInput.value, 10)});
-  card.querySelector('[data-a=overrides]').onclick = () => toggleOverrides(f.name, ov);
+    </div>`);
+  const ov = el('<div class="ov"></div>');
+  card.appendChild(row);
+  card.appendChild(ov);
+  card.classList.toggle('disabled', !f.enabled);
+
+  const rolloutInput = row.querySelector('.rollout');
+
+  row.querySelector('[data-a=toggle]').onclick = (ev) => {
+    const enabling = !currentEnabled(card);
+    if (!enabling && !confirm(`Disable "${f.name}"? This turns the feature off everywhere it's gated.`)) return;
+    withBusy(ev.currentTarget, async () => {
+      const updated = await api('POST', `/api/flags/${encodeURIComponent(f.name)}/` + (enabling ? 'enable' : 'disable'));
+      applyFlag(card, updated);
+      toast(`${f.name} ${updated.enabled ? 'enabled' : 'disabled'}.`, 'ok');
+    });
+  };
+
+  row.querySelector('[data-a=save-rollout]').onclick = (ev) => {
+    const pct = parseInt(rolloutInput.value, 10);
+    if (isNaN(pct) || pct < 0 || pct > 100) { toast('Rollout must be a whole number between 0 and 100.', 'err'); return; }
+    withBusy(ev.currentTarget, async () => {
+      const updated = await api('PUT', `/api/flags/${encodeURIComponent(f.name)}/rollout`, { percentage: pct });
+      applyFlag(card, updated);
+      toast(`${f.name} rollout set to ${updated.rolloutPercentage}%.`, 'ok');
+    });
+  };
+
+  row.querySelector('[data-a=overrides]').onclick = (ev) => toggleOverrides(f.name, ov, ev.currentTarget);
   return card;
 }
 
-async function act(method, path, body) {
-  showErr('');
-  try { await api(method, path, body); await load(); } catch (e) { showErr(e.message); }
+function currentEnabled(card) {
+  return !!card.querySelector('[data-badge] .badge.on');
 }
 
-async function toggleOverrides(name, ov) {
-  if (ov.classList.contains('open')) { ov.classList.remove('open'); ov.innerHTML=''; return; }
+/** Update a card's row (badge, toggle label, rollout) in place from a fresh flag object. */
+function applyFlag(card, f) {
+  card.querySelector('[data-badge]').innerHTML = badgeHtml(f.enabled);
+  card.querySelector('[data-a=toggle]').textContent = f.enabled ? 'Disable' : 'Enable';
+  card.querySelector('.rollout').value = f.rolloutPercentage;
+  card.classList.toggle('disabled', !f.enabled);
+}
+
+// ── overrides ────────────────────────────────────────────────────────────────
+async function toggleOverrides(name, ov, btn) {
+  if (ov.classList.contains('open')) { ov.classList.remove('open'); ov.innerHTML = ''; return; }
   ov.classList.add('open');
-  ov.innerHTML = '<div class="muted">Loading…</div>';
+  ov.innerHTML = '<div class="muted"><span class="spin"></span> Loading overrides…</div>';
+  await refreshOverrides(name, ov);
+}
+
+async function refreshOverrides(name, ov) {
+  let list;
   try {
-    const list = await api('GET', `/api/flags/${encodeURIComponent(name)}/overrides`);
-    const rows = list.map(o => `
-      <tr>
-        <td class="scope">${esc(o.scope)}</td>
-        <td class="name">${esc(o.value)}</td>
-        <td>${o.enabled ? '<span class="badge on">on</span>' : '<span class="badge off">off</span>'}</td>
-        <td class="muted">${esc(o.reason)}</td>
-        <td style="text-align:right"><button class="link" data-del="${o.id}">remove</button></td>
-      </tr>`).join('');
-    ov.innerHTML = `
-      <table><tbody>${rows || '<tr><td class="muted">No overrides.</td></tr>'}</tbody></table>
-      <div class="form">
-        <select data-f="scope"><option value="SUBJECT">SUBJECT</option><option value="SEGMENT">SEGMENT</option></select>
-        <input data-f="value" placeholder="subject id / segment name" autocomplete="off">
-        <label class="muted"><input data-f="enabled" type="checkbox" checked> enabled</label>
-        <input data-f="reason" placeholder="reason (optional)" autocomplete="off">
-        <button class="primary" data-add>Add override</button>
-      </div>`;
-    ov.querySelectorAll('[data-del]').forEach(b => b.onclick = () => act('DELETE', `/api/overrides/${b.getAttribute('data-del')}`));
-    ov.querySelector('[data-add]').onclick = () => {
-      const val = ov.querySelector('[data-f=value]').value.trim();
-      if (!val) { showErr('Override needs a subject id or segment name.'); return; }
-      act('POST', `/api/flags/${encodeURIComponent(name)}/overrides`, {
+    list = await api('GET', `/api/flags/${encodeURIComponent(name)}/overrides`);
+  } catch (e) {
+    ov.innerHTML = `<div class="inline-err">Couldn't load overrides — ${esc(e.message)}</div>
+                    <div class="spacer"></div>
+                    <button data-retry>Retry</button>`;
+    ov.querySelector('[data-retry]').onclick = (ev) => withBusy(ev.currentTarget, () => refreshOverrides(name, ov));
+    return;
+  }
+  renderOverrides(name, ov, list);
+}
+
+function renderOverrides(name, ov, list) {
+  const rows = list.map(o => `
+    <tr data-ov="${esc(o.id)}">
+      <td class="scope">${esc(o.scope)}</td>
+      <td class="name">${esc(o.value)}</td>
+      <td>${o.enabled ? '<span class="badge on">on</span>' : '<span class="badge off">off</span>'}</td>
+      <td class="muted">${esc(o.reason) || '—'}</td>
+      <td style="text-align:right"><button class="link danger" data-del="${esc(o.id)}">remove</button></td>
+    </tr>`).join('');
+
+  ov.innerHTML = `
+    <table>
+      <thead><tr><th>Scope</th><th>Value</th><th>State</th><th>Reason</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" class="muted" style="padding:14px 6px">No overrides yet.</td></tr>'}</tbody>
+    </table>
+    <div class="form">
+      <select data-f="scope">
+        <option value="SUBJECT">SUBJECT</option>
+        <option value="SEGMENT">SEGMENT</option>
+      </select>
+      <input data-f="value" placeholder="subject id / segment name" autocomplete="off">
+      <label class="muted" style="display:inline-flex;align-items:center;gap:5px">
+        <input data-f="enabled" type="checkbox" checked> enabled
+      </label>
+      <input data-f="reason" placeholder="reason (optional)" autocomplete="off">
+      <button class="primary" data-add>Add override</button>
+    </div>
+    <div class="ovmsg"></div>`;
+
+  ov.querySelectorAll('[data-del]').forEach(b => {
+    b.onclick = (ev) => {
+      if (!confirm('Remove this override?')) return;
+      withBusy(ev.currentTarget, async () => {
+        await api('DELETE', `/api/overrides/${encodeURIComponent(b.getAttribute('data-del'))}`);
+        toast('Override removed.', 'ok');
+        await refreshOverrides(name, ov);
+      });
+    };
+  });
+
+  const addBtn = ov.querySelector('[data-add]');
+  const submitAdd = (ev) => {
+    const trigger = ev.currentTarget && ev.currentTarget.hasAttribute('data-add') ? ev.currentTarget : addBtn;
+    const val = ov.querySelector('[data-f=value]').value.trim();
+    const msg = ov.querySelector('.ovmsg');
+    if (!val) { msg.innerHTML = '<div class="inline-err">Enter a subject id or segment name.</div>'; return; }
+    msg.innerHTML = '';
+    withBusy(trigger, async () => {
+      await api('POST', `/api/flags/${encodeURIComponent(name)}/overrides`, {
         scope: ov.querySelector('[data-f=scope]').value,
         value: val,
         enabled: ov.querySelector('[data-f=enabled]').checked,
         reason: ov.querySelector('[data-f=reason]').value.trim() || null
       });
-    };
-  } catch (e) { ov.innerHTML = ''; showErr(e.message); }
+      toast('Override saved.', 'ok');
+      await refreshOverrides(name, ov);
+    }, (e) => { msg.innerHTML = `<div class="inline-err">${esc(e.message)}</div>`; });
+  };
+  addBtn.onclick = submitAdd;
+  ov.querySelector('[data-f=value]').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAdd(e); });
+  ov.querySelector('[data-f=reason]').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAdd(e); });
 }
 
-function createFlag() {
+// ── create ───────────────────────────────────────────────────────────────────
+function createFlag(ev) {
   const input = document.getElementById('newName');
   const name = input.value.trim();
-  if (!name) { showErr('Enter a flag name.'); return; }
-  input.value = '';
-  act('POST', '/api/flags', {name});
+  if (!name) { toast('Enter a flag name.', 'err'); input.focus(); return; }
+  withBusy(ev.currentTarget, async () => {
+    await api('POST', '/api/flags', { name });
+    input.value = '';
+    toast(`Flag "${name}" added.`, 'ok');
+    await load();
+  });
 }
+
+document.getElementById('addFlagBtn').onclick = createFlag;
+document.getElementById('refreshBtn').onclick = (ev) => withBusy(ev.currentTarget, load);
+document.getElementById('newName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('addFlagBtn').click();
+});
 
 load();
 </script>
