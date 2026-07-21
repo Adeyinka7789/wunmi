@@ -6,7 +6,7 @@
 
     <groupId>io.github.adeyinka7789</groupId>
     <artifactId>wunmi-parent</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>wunmi</name>
@@ -207,6 +207,15 @@
                         <configuration>
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
+                            <!-- The demo module is a sample, not a library. maven.deploy.skip does
+                                 NOT keep it out of the Central bundle (this plugin stages from its
+                                 own dir), so exclude it explicitly here. -->
+                            <excludeArtifacts>
+                                <artifact>
+                                    <groupId>io.github.adeyinka7789</groupId>
+                                    <artifactId>wunmi-example-spring-boot</artifactId>
+                                </artifact>
+                            </excludeArtifacts>
                         </configuration>
                     </plugin>
                 </plugins>
