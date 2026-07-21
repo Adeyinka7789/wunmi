@@ -1,6 +1,7 @@
 package io.github.adeyinka7789.wunmi.admin;
 
 import io.github.adeyinka7789.wunmi.FlagEngine;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -32,8 +33,9 @@ public class WunmiAdminAutoConfiguration {
     @Bean
     @ConditionalOnBean(FlagEngine.class)
     @ConditionalOnMissingBean
-    public WunmiAdminController wunmiAdminController(FlagEngine engine) {
-        return new WunmiAdminController(engine);
+    public WunmiAdminController wunmiAdminController(FlagEngine engine,
+                                                    ObjectProvider<WunmiAdminMetadata> metadata) {
+        return new WunmiAdminController(engine, metadata.getIfAvailable());
     }
 
     /**

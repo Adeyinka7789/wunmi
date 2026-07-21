@@ -53,6 +53,15 @@
   .ov td, .ov th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; }
   .ov th { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:600; }
   .ov .form { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .ta { position:relative; display:inline-block; }
+  .ta-drop { display:none; position:absolute; top:calc(100% + 3px); left:0; right:0; min-width:220px;
+             background:var(--panel); border:1px solid var(--line); border-radius:8px;
+             box-shadow:0 8px 28px rgba(0,0,0,.28); max-height:220px; overflow-y:auto; z-index:50; }
+  .ta-drop.open { display:block; }
+  .ta-opt { display:block; width:100%; text-align:left; border:none; background:none; color:var(--text);
+            padding:8px 11px; border-radius:0; cursor:pointer; min-height:auto; }
+  .ta-opt:hover { background:var(--panel2); }
+  .ta-opt small { color:var(--muted); }
   .scope { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
   .empty { color:var(--muted); padding:40px; text-align:center; }
   .ovmsg { min-height:0; }
@@ -88,6 +97,17 @@
 <script>
 const BASE = "__BASE__";
 const esc = (s) => (s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+
+// Host-provided domain metadata (labels + pickers for overrides). Generic defaults until loaded.
+let META = { subjectLabel: 'SUBJECT', segmentLabel: 'SEGMENT', segments: [], subjectSearch: false };
+async function loadMeta() {
+  try {
+    const m = await api('GET', '/api/metadata');
+    META = { subjectLabel: m.subjectLabel || 'SUBJECT', segmentLabel: m.segmentLabel || 'SEGMENT',
+             segments: Array.isArray(m.segments) ? m.segments : [], subjectSearch: !!m.subjectSearch };
+  } catch (_) { /* keep generic defaults — overrides still work with free-text inputs */ }
+}
+const segmentLabelFor = (v) => { const o = META.segments.find(s => s.value === v); return o ? o.label : v; };
 
 /** Parse a fragment of HTML into a single detached element (first element node). */
 function el(html) {
@@ -243,11 +263,77 @@ async function refreshOverrides(name, ov) {
   renderOverrides(name, ov, list);
 }
 
+// Value column of an existing-override row: segments show their friendly label, subjects the raw id.
+function overrideValueDisplay(o) {
+  return o.scope === 'SEGMENT' ? segmentLabelFor(o.value) : o.value;
+}
+
+// The value control for the add-form, chosen from host metadata + selected scope.
+function valueControlHtml(scope) {
+  if (scope === 'SEGMENT') {
+    if (META.segments.length) {
+      const opts = [`<option value="">Select ${esc(META.segmentLabel)}…</option>`]
+        .concat(META.segments.map(s => `<option value="${esc(s.value)}">${esc(s.label)}</option>`)).join('');
+      return `<select data-f="value">${opts}</select>`;
+    }
+    return `<input data-f="value" placeholder="${esc(META.segmentLabel)} name" autocomplete="off">`;
+  }
+  // SUBJECT
+  if (META.subjectSearch) {
+    return `<span class="ta">
+      <input data-f="value-search" placeholder="Search ${esc(META.subjectLabel)}…" autocomplete="off">
+      <input type="hidden" data-f="value">
+      <div class="ta-drop" data-drop></div>
+    </span>`;
+  }
+  return `<input data-f="value" placeholder="${esc(META.subjectLabel)} id" autocomplete="off">`;
+}
+
+function renderValueControl(ov, submitAdd) {
+  const scope = ov.querySelector('[data-f=scope]').value;
+  const wrap = ov.querySelector('[data-valuewrap]');
+  wrap.innerHTML = valueControlHtml(scope);
+  ov.querySelector('.ovmsg').innerHTML = '';
+  const valField = wrap.querySelector('input[data-f=value]');
+  if (valField) valField.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAdd(e); });
+  const search = wrap.querySelector('[data-f=value-search]');
+  if (search) wireTypeahead(wrap, search);
+}
+
+function wireTypeahead(wrap, search) {
+  const drop = wrap.querySelector('[data-drop]');
+  const hidden = wrap.querySelector('input[data-f=value]');
+  let timer = null;
+  search.addEventListener('input', () => {
+    hidden.value = ''; // clear any prior selection until the operator picks again
+    const q = search.value.trim();
+    clearTimeout(timer);
+    if (!q) { drop.innerHTML = ''; drop.classList.remove('open'); return; }
+    timer = setTimeout(async () => {
+      let results = [];
+      try { results = await api('GET', '/api/subjects?q=' + encodeURIComponent(q)); } catch (_) {}
+      if (search.value.trim() !== q) return; // a newer keystroke superseded this response
+      if (!results.length) {
+        drop.innerHTML = '<div class="ta-opt muted">No matches</div>';
+      } else {
+        drop.innerHTML = results.map(r =>
+          `<button type="button" class="ta-opt" data-val="${esc(r.value)}" data-label="${esc(r.label)}">${esc(r.label)} <small>${esc(r.value)}</small></button>`).join('');
+        drop.querySelectorAll('[data-val]').forEach(b => b.onclick = () => {
+          hidden.value = b.getAttribute('data-val');
+          search.value = b.getAttribute('data-label');
+          drop.classList.remove('open');
+        });
+      }
+      drop.classList.add('open');
+    }, 200);
+  });
+}
+
 function renderOverrides(name, ov, list) {
   const rows = list.map(o => `
     <tr data-ov="${esc(o.id)}">
-      <td class="scope">${esc(o.scope)}</td>
-      <td class="name">${esc(o.value)}</td>
+      <td class="scope">${esc(o.scope === 'SEGMENT' ? META.segmentLabel : META.subjectLabel)}</td>
+      <td class="name">${esc(overrideValueDisplay(o))}</td>
       <td>${o.enabled ? '<span class="badge on">on</span>' : '<span class="badge off">off</span>'}</td>
       <td class="muted">${esc(o.reason) || '—'}</td>
       <td style="text-align:right"><button class="link danger" data-del="${esc(o.id)}">remove</button></td>
@@ -260,10 +346,10 @@ function renderOverrides(name, ov, list) {
     </table>
     <div class="form">
       <select data-f="scope">
-        <option value="SUBJECT">SUBJECT</option>
-        <option value="SEGMENT">SEGMENT</option>
+        <option value="SUBJECT">${esc(META.subjectLabel)}</option>
+        <option value="SEGMENT">${esc(META.segmentLabel)}</option>
       </select>
-      <input data-f="value" placeholder="subject id / segment name" autocomplete="off">
+      <span data-valuewrap></span>
       <label class="muted" style="display:inline-flex;align-items:center;gap:5px">
         <input data-f="enabled" type="checkbox" checked> enabled
       </label>
@@ -284,15 +370,23 @@ function renderOverrides(name, ov, list) {
   });
 
   const addBtn = ov.querySelector('[data-add]');
+  const msg = ov.querySelector('.ovmsg');
   const submitAdd = (ev) => {
-    const trigger = ev.currentTarget && ev.currentTarget.hasAttribute('data-add') ? ev.currentTarget : addBtn;
-    const val = ov.querySelector('[data-f=value]').value.trim();
-    const msg = ov.querySelector('.ovmsg');
-    if (!val) { msg.innerHTML = '<div class="inline-err">Enter a subject id or segment name.</div>'; return; }
+    const trigger = ev && ev.currentTarget && ev.currentTarget.hasAttribute('data-add') ? ev.currentTarget : addBtn;
+    const valField = ov.querySelector('[data-f=value]');
+    const val = (valField ? valField.value : '').trim();
+    const scope = ov.querySelector('[data-f=scope]').value;
+    if (!val) {
+      const searching = scope === 'SUBJECT' && META.subjectSearch;
+      msg.innerHTML = `<div class="inline-err">${searching
+        ? 'Pick a ' + esc(META.subjectLabel) + ' from the list.'
+        : 'Choose a ' + esc(scope === 'SEGMENT' ? META.segmentLabel : META.subjectLabel) + '.'}</div>`;
+      return;
+    }
     msg.innerHTML = '';
     withBusy(trigger, async () => {
       await api('POST', `/api/flags/${encodeURIComponent(name)}/overrides`, {
-        scope: ov.querySelector('[data-f=scope]').value,
+        scope: scope,
         value: val,
         enabled: ov.querySelector('[data-f=enabled]').checked,
         reason: ov.querySelector('[data-f=reason]').value.trim() || null
@@ -301,9 +395,11 @@ function renderOverrides(name, ov, list) {
       await refreshOverrides(name, ov);
     }, (e) => { msg.innerHTML = `<div class="inline-err">${esc(e.message)}</div>`; });
   };
+
   addBtn.onclick = submitAdd;
-  ov.querySelector('[data-f=value]').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAdd(e); });
+  ov.querySelector('[data-f=scope]').addEventListener('change', () => renderValueControl(ov, submitAdd));
   ov.querySelector('[data-f=reason]').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAdd(e); });
+  renderValueControl(ov, submitAdd); // initial value field for the default (SUBJECT) scope
 }
 
 // ── create ───────────────────────────────────────────────────────────────────
@@ -325,7 +421,16 @@ document.getElementById('newName').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('addFlagBtn').click();
 });
 
-load();
+// Close any open typeahead dropdown when clicking outside its box (registered once).
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.ta-drop.open').forEach(d => {
+    const box = d.closest('.ta');
+    if (!box || !box.contains(e.target)) d.classList.remove('open');
+  });
+});
+
+// Load domain metadata first so the overrides UI can render the right pickers, then the flags.
+loadMeta().finally(load);
 </script>
 </body>
 </html>

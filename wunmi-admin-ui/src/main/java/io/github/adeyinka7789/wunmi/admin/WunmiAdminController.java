@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -40,15 +41,44 @@ public class WunmiAdminController {
     private static final String PAGE_RESOURCE = "io/github/adeyinka7789/wunmi/admin/admin.html";
 
     private final FlagEngine engine;
+    private final WunmiAdminMetadata metadata; // nullable — host may not describe its domain
     private volatile String pageHtml;
 
+    /** Console with no host metadata: generic SUBJECT/SEGMENT labels and free-text inputs. */
     public WunmiAdminController(FlagEngine engine) {
+        this(engine, null);
+    }
+
+    public WunmiAdminController(FlagEngine engine, WunmiAdminMetadata metadata) {
         this.engine = engine;
+        this.metadata = metadata;
     }
 
     @GetMapping(produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> page() {
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html());
+    }
+
+    /**
+     * Host-provided domain metadata for the overrides UI. Absent a {@link WunmiAdminMetadata}
+     * bean this returns generic defaults, and the console renders free-text value inputs.
+     */
+    @GetMapping("/api/metadata")
+    public MetadataView metadata() {
+        if (metadata == null) {
+            return new MetadataView("Subject", "Segment", List.of(), false);
+        }
+        return new MetadataView(metadata.subjectLabel(), metadata.segmentLabel(),
+                metadata.segments(), metadata.supportsSubjectSearch());
+    }
+
+    /** Typeahead source for SUBJECT overrides; empty unless the host supports subject search. */
+    @GetMapping("/api/subjects")
+    public List<WunmiAdminMetadata.Option> subjects(@RequestParam("q") String query) {
+        if (metadata == null || !metadata.supportsSubjectSearch() || query == null || query.isBlank()) {
+            return List.of();
+        }
+        return metadata.searchSubjects(query.trim());
     }
 
     @GetMapping("/api/flags")
@@ -114,6 +144,10 @@ public class WunmiAdminController {
         }
         return cached;
     }
+
+    /** Shape returned by {@code GET /api/metadata} — what the console needs to render pickers. */
+    public record MetadataView(String subjectLabel, String segmentLabel,
+                               List<WunmiAdminMetadata.Option> segments, boolean subjectSearch) { }
 
     public record NameRequest(String name) { }
 

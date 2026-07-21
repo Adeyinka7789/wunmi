@@ -89,6 +89,47 @@ class WunmiAdminControllerTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
+    @Test
+    void metadataDefaultsWhenNoHostMetadata() throws Exception {
+        mvc.perform(get("/wunmi/admin/api/metadata"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subjectLabel").value("Subject"))
+                .andExpect(jsonPath("$.segmentLabel").value("Segment"))
+                .andExpect(jsonPath("$.subjectSearch").value(false))
+                .andExpect(jsonPath("$.segments.length()").value(0));
+        // Subject search is unavailable without host metadata → always empty.
+        mvc.perform(get("/wunmi/admin/api/subjects").param("q", "ac"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void metadataAndSubjectSearchFromHost() throws Exception {
+        WunmiAdminMetadata meta = new WunmiAdminMetadata() {
+            @Override public String subjectLabel() { return "Tenant"; }
+            @Override public String segmentLabel() { return "Plan"; }
+            @Override public List<Option> segments() { return List.of(new Option("ENTERPRISE", "Enterprise")); }
+            @Override public boolean supportsSubjectSearch() { return true; }
+            @Override public List<Option> searchSubjects(String query) {
+                return "ac".equalsIgnoreCase(query) ? List.of(new Option("t-1", "Acme Ltd")) : List.of();
+            }
+        };
+        MockMvc m = MockMvcBuilders.standaloneSetup(new WunmiAdminController(engine, meta)).build();
+
+        m.perform(get("/wunmi/admin/api/metadata"))
+                .andExpect(jsonPath("$.subjectLabel").value("Tenant"))
+                .andExpect(jsonPath("$.segmentLabel").value("Plan"))
+                .andExpect(jsonPath("$.subjectSearch").value(true))
+                .andExpect(jsonPath("$.segments[0].value").value("ENTERPRISE"))
+                .andExpect(jsonPath("$.segments[0].label").value("Enterprise"));
+
+        m.perform(get("/wunmi/admin/api/subjects").param("q", "ac"))
+                .andExpect(jsonPath("$[0].value").value("t-1"))
+                .andExpect(jsonPath("$[0].label").value("Acme Ltd"));
+        m.perform(get("/wunmi/admin/api/subjects").param("q", "zz"))
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
     /** Minimal in-memory store for the controller test. */
     static class MapFlagStore implements FlagStore {
         private final Map<String, Flag> flags = new HashMap<>();
